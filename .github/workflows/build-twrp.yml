@@ -1,0 +1,115 @@
+name: Build TWRP - Meizu Note 8 M1822
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout device tree
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            adb \
+            bc \
+            bison \
+            build-essential \
+            ccache \
+            curl \
+            flex \
+            g++-multilib \
+            gcc-multilib \
+            git \
+            gnupg \
+            gperf \
+            imagemagick \
+            lib32ncurses5-dev \
+            lib32readline-dev \
+            lib32z1-dev \
+            liblz4-tool \
+            libncurses5 \
+            libncurses5-dev \
+            libsdl1.2-dev \
+            libssl-dev \
+            libxml2-utils \
+            lzop \
+            pngcrush \
+            rsync \
+            schedtool \
+            squashfs-tools \
+            unzip \
+            xsltproc \
+            zip \
+            zlib1g-dev
+
+      - name: Install repo
+        run: |
+          mkdir -p "$HOME/bin"
+          curl https://storage.googleapis.com/git-repo-downloads/repo > "$HOME/bin/repo"
+          chmod a+x "$HOME/bin/repo"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Initialize TWRP source
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/twrp"
+          cd "$GITHUB_WORKSPACE/twrp"
+
+          repo init \
+            -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git \
+            -b twrp-8.1 \
+            --depth=1
+
+      - name: Sync TWRP source
+        run: |
+          cd "$GITHUB_WORKSPACE/twrp"
+          repo sync -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+
+      - name: Install M1822 device tree
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/twrp/device/meizu"
+          cp -a "$GITHUB_WORKSPACE/device/meizu/m1822" \
+            "$GITHUB_WORKSPACE/twrp/device/meizu/"
+
+      - name: Configure build
+        run: |
+          cd "$GITHUB_WORKSPACE/twrp"
+
+          export ALLOW_MISSING_DEPENDENCIES=true
+
+          source build/envsetup.sh
+          lunch omni_m1822-eng
+
+      - name: Build recovery image
+        run: |
+          cd "$GITHUB_WORKSPACE/twrp"
+
+          export ALLOW_MISSING_DEPENDENCIES=true
+
+          source build/envsetup.sh
+          lunch omni_m1822-eng
+
+          mka recoveryimage
+
+      - name: Collect recovery image
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+
+          find "$GITHUB_WORKSPACE/twrp/out/target/product/m1822" \
+            -maxdepth 1 \
+            -type f \
+            -name "recovery.img" \
+            -exec cp {} "$GITHUB_WORKSPACE/artifacts/recovery.img" \;
+
+          sha256sum "$GITHUB_WORKSPACE/artifacts/recovery.img" \
+            > "$GITHUB_WORKSPACE/artifacts/recovery.img.sha256"
+
+      - name: Upload recovery artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: twrp-m1822-recovery
+          path: artifacts/
