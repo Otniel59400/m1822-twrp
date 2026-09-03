@@ -14,6 +14,7 @@ jobs:
       TZ: UTC
 
     steps:
+
       # ============================================================
       # 1. Checkout
       # ============================================================
@@ -22,19 +23,21 @@ jobs:
 
       # ============================================================
       # 2. Java 8
-      # TWRP 8.1 / Omni uses an old Android build environment.
       # ============================================================
-- name: Setup Java 8
-  uses: actions/setup-java@v5
-  with:
-    distribution: temurin
-    java-version: "8"
+      - name: Setup Java 8
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "8"
 
       # ============================================================
       # 3. System dependencies
       # ============================================================
       - name: Install build dependencies
+        shell: bash
         run: |
+          set -e
+
           sudo apt-get update
 
           sudo apt-get install -y \
@@ -72,13 +75,7 @@ jobs:
             zlib1g-dev
 
       # ============================================================
-      # 4. Python 2
-      #
-      # Ubuntu 22.04 does not provide the old "python" package
-      # required by parts of the TWRP 8.1 / Omni build system.
-      #
-      # Build a minimal Python 2.7.18 locally instead of modifying
-      # the system Python installation.
+      # 4. Python 2.7
       # ============================================================
       - name: Install Python 2.7
         shell: bash
@@ -108,19 +105,24 @@ jobs:
           make -j"$(nproc)"
           make install
 
+          mkdir -p "$PYTHON_PREFIX/bin"
+
+          ln -sf \
+            "$PYTHON_PREFIX/bin/python2.7" \
+            "$PYTHON_PREFIX/bin/python"
+
           echo "$PYTHON_PREFIX/bin" >> "$GITHUB_PATH"
 
-          # The old Android build system expects "python".
-          ln -sf "$PYTHON_PREFIX/bin/python2.7" "$PYTHON_PREFIX/bin/python"
+          echo
+          echo "============================================"
+          echo "Python 2 installation"
+          echo "============================================"
 
-          echo "Python 2 version:"
           "$PYTHON_PREFIX/bin/python2.7" --version
-
-          echo "Python symlink:"
           "$PYTHON_PREFIX/bin/python" --version
 
       # ============================================================
-      # 5. Force old Android build scripts to use Python 2
+      # 5. Configure Python 2
       # ============================================================
       - name: Configure Python 2 environment
         shell: bash
@@ -132,13 +134,23 @@ jobs:
           echo "PYTHON=$PYTHON2" >> "$GITHUB_ENV"
           echo "PYTHON2=$PYTHON2" >> "$GITHUB_ENV"
 
+          export PATH="$HOME/python2/bin:$PATH"
           export PYTHON="$PYTHON2"
 
-          echo "Using:"
-          which python
+          echo
+          echo "============================================"
+          echo "Python environment"
+          echo "============================================"
+
+          echo "Python:"
           python --version
 
-          echo "Python 2 path:"
+          echo
+          echo "Python executable:"
+          which python
+
+          echo
+          echo "Resolved path:"
           readlink -f "$(which python)"
 
       # ============================================================
@@ -159,6 +171,8 @@ jobs:
 
           echo "$HOME/bin" >> "$GITHUB_PATH"
 
+          echo
+          echo "repo version:"
           "$HOME/bin/repo" --version
 
       # ============================================================
@@ -204,19 +218,23 @@ jobs:
 
           mkdir -p "$GITHUB_WORKSPACE/twrp/device/meizu"
 
-          rm -rf "$GITHUB_WORKSPACE/twrp/device/meizu/m1822"
+          rm -rf \
+            "$GITHUB_WORKSPACE/twrp/device/meizu/m1822"
 
           cp -a \
             "$GITHUB_WORKSPACE/device/meizu/m1822" \
             "$GITHUB_WORKSPACE/twrp/device/meizu/"
 
-          echo "Installed device tree:"
-          find "$GITHUB_WORKSPACE/twrp/device/meizu/m1822" \
+          echo
+          echo "Installed M1822 device tree:"
+          find \
+            "$GITHUB_WORKSPACE/twrp/device/meizu/m1822" \
             -maxdepth 3 \
-            -type f | sort
+            -type f \
+            | sort
 
       # ============================================================
-      # 10. Verify M1822 prebuilt kernel
+      # 10. Verify M1822 kernel
       # ============================================================
       - name: Verify M1822 kernel
         shell: bash
@@ -231,14 +249,16 @@ jobs:
             exit 1
           fi
 
-          echo "Prebuilt kernel found:"
+          echo
+          echo "Prebuilt kernel:"
           ls -lh "$KERNEL"
 
+          echo
           echo "Kernel SHA256:"
           sha256sum "$KERNEL"
 
       # ============================================================
-      # 11. Verify device configuration
+      # 11. Verify M1822 configuration
       # ============================================================
       - name: Verify M1822 configuration
         shell: bash
@@ -255,10 +275,11 @@ jobs:
           test -f "$DEVICE/system.prop"
           test -f "$DEVICE/prebuilt/kernel"
 
+          echo
           echo "M1822 device tree verification passed."
 
           echo
-          echo "BoardConfig:"
+          echo "Board configuration:"
           grep -E \
             'TARGET_ARCH|TARGET_BOARD_PLATFORM|TARGET_BOOTLOADER_BOARD_NAME|TARGET_PREBUILT_KERNEL|BOARD_KERNEL_BASE|BOARD_KERNEL_PAGESIZE|BOARD_KERNEL_CMDLINE|BOARD_RECOVERYIMAGE_PARTITION_SIZE' \
             "$DEVICE/BoardConfig.mk" || true
@@ -273,9 +294,17 @@ jobs:
 
           cd "$GITHUB_WORKSPACE/twrp"
 
-          export ALLOW_MISSING_DEPENDENCIES=true
+          export PATH="$HOME/python2/bin:$PATH"
           export PYTHON="$HOME/python2/bin/python"
+          export PYTHON2="$HOME/python2/bin/python"
+          export ALLOW_MISSING_DEPENDENCIES=true
 
+          echo
+          echo "============================================"
+          echo "Build environment"
+          echo "============================================"
+
+          echo
           echo "Java:"
           java -version
 
@@ -284,8 +313,12 @@ jobs:
           python --version
 
           echo
-          echo "Python path:"
+          echo "Python executable:"
           which python
+
+          echo
+          echo "Python resolved path:"
+          readlink -f "$(which python)"
 
           echo
           echo "ALLOW_MISSING_DEPENDENCIES:"
@@ -302,7 +335,7 @@ jobs:
           lunch omni_m1822-eng
 
       # ============================================================
-      # 13. Build recovery
+      # 13. Build recovery image
       # ============================================================
       - name: Build recovery image
         shell: bash
@@ -312,23 +345,24 @@ jobs:
 
           cd "$GITHUB_WORKSPACE/twrp"
 
-          export ALLOW_MISSING_DEPENDENCIES=true
+          export PATH="$HOME/python2/bin:$PATH"
           export PYTHON="$HOME/python2/bin/python"
-
-          source build/envsetup.sh
-
-          lunch omni_m1822-eng
+          export PYTHON2="$HOME/python2/bin/python"
+          export ALLOW_MISSING_DEPENDENCIES=true
 
           echo
           echo "============================================"
           echo "Starting TWRP recoveryimage build"
           echo "============================================"
-          echo
+
+          source build/envsetup.sh
+
+          lunch omni_m1822-eng
 
           mka recoveryimage
 
       # ============================================================
-      # 14. Validate generated recovery
+      # 14. Validate recovery image
       # ============================================================
       - name: Validate recovery image
         shell: bash
@@ -338,6 +372,7 @@ jobs:
           PRODUCT="$GITHUB_WORKSPACE/twrp/out/target/product/m1822"
           RECOVERY="$PRODUCT/recovery.img"
 
+          echo
           echo "Looking for:"
           echo "$RECOVERY"
 
@@ -346,10 +381,12 @@ jobs:
             echo "ERROR: recovery.img was NOT generated."
             echo
             echo "Files in product directory:"
+
             find "$PRODUCT" \
               -maxdepth 1 \
               -type f \
-              -printf '%f\n' | sort || true
+              -printf '%f\n' \
+              | sort || true
 
             exit 1
           fi
@@ -358,12 +395,13 @@ jobs:
           echo "============================================"
           echo "Recovery generated successfully"
           echo "============================================"
-          echo
 
+          echo
+          echo "File:"
           ls -lh "$RECOVERY"
 
           echo
-          echo "File information:"
+          echo "Type:"
           file "$RECOVERY"
 
           echo
@@ -371,11 +409,11 @@ jobs:
           sha256sum "$RECOVERY"
 
           echo
-          echo "Size in bytes:"
-          stat -c '%s' "$RECOVERY"
+          echo "Size:"
+          stat -c '%s bytes' "$RECOVERY"
 
       # ============================================================
-      # 15. Copy artifacts
+      # 15. Collect artifacts
       # ============================================================
       - name: Collect recovery artifacts
         shell: bash
@@ -399,11 +437,12 @@ jobs:
             "$GITHUB_WORKSPACE/device/meizu/m1822/BoardConfig.mk" \
             "$ARTIFACTS/BoardConfig.mk"
 
+          echo
           echo "Artifacts:"
           ls -lh "$ARTIFACTS"
 
       # ============================================================
-      # 16. Upload recovery
+      # 16. Upload artifact
       # ============================================================
       - name: Upload TWRP recovery
         uses: actions/upload-artifact@v4
