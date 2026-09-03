@@ -1,0 +1,24 @@
+﻿# Android build output
+out/
+build/
+.repo/
+
+# Temporary extraction
+extractions/
+ramdisk/
+
+# Stock images - kept locally for validation
+boot.img
+recovery.img
+recovery-stock-original.img
+boot-kernel.bin
+recovery-kernel.bin
+vbmeta.img
+devinfo_mz.img
+
+# Logs
+*.log
+
+# Windows
+Thumbs.db
+Desktop.ini

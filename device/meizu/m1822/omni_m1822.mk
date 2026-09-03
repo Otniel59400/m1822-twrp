@@ -1,0 +1,7 @@
+LOCAL_PATH := device/meizu/m1822
+
+PRODUCT_DEVICE := m1822
+PRODUCT_NAME := omni_m1822
+PRODUCT_BRAND := Meizu
+PRODUCT_MODEL := meizu note8
+PRODUCT_MANUFACTURER := Meizu
